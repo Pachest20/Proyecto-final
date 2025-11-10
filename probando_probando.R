@@ -1,0 +1,2 @@
+
+nombres <- c ("diego", "fer")
