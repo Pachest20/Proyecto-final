@@ -1,12 +1,17 @@
+
 library(Biostrings)
 
 # reverso complementario
 revcomp <- function(x) reverseComplement(DNAString(x))
 
 # temperatura
-tm <- function(x) {
-  gc <- sum(strsplit(x, "") %in% c("G", "C")) 
-  round(64.9 + 41 * (gc - 16.4) / nchar(x), 1)
+tm <- function(primer) {
+  bases <- strsplit(primer, "")
+  gc    <- sum(bases == "G" | bases == "C")
+  long  <- length(bases)
+  
+  Tm <- 64.9 + 41 * (gc - 16.4) / long
+  round(Tm, 1)
 }
 
 # Viabilidad de cada uno
@@ -21,7 +26,7 @@ eval_primer <- function(primer, tipo) {
   print(paste("Tm:", tmel, "°C. ", ifelse(tmel>=55 & tmel<=65, "OK", "No óptimo")))
 }
 
-# Viabilidad en conjunto
+# Viabilidad de ambos
 eval_pair <- function(fw, rv) {
   diff <- abs(tm(fw) - tm(rv))
   print(paste("Diferencia de Tm:", diff,  "°C. ", ifelse(diff<=2, "OK", "Muy alta")))
@@ -84,7 +89,7 @@ evaluar_primers <- function(fw, rv, sec) {
   return(res)
 }
 
-blaOxy <-readDNAStringSet("C:/Users/diego/OneDrive/Desktop/Bioinformatica 2025/blaOXY.fna")
+blaOxy <-readDNAStringSet("C:/Users/diego/OneDrive/Documentos/GitHub/Proyecto-final/blaOXY.fna")
 resultado <- evaluar_primers(
   fw = "AATTGATGATGGAATTCCAT",
   rv = "GGTCCGCAGACGGCATGAA",
