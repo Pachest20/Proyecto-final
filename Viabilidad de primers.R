@@ -176,17 +176,17 @@ eval_primer <- function(primer, tipo) {
   hqlla<- horquillas(primer)
   self_prim <- mism_prim(primer)
   
-  print(paste(tipo, "-", primer))
-  print(paste("Longitud:", long, "pb. ", 
-              ifelse(long %in% 18:24, "OK", "No óptimo")))
-  print(paste("%GC:", gc_percent, "%. ", 
-              ifelse(gc_percent >= 40 & gc_percent<=60, "OK", "No óptimo")))
-  print(paste("Tm:", tmel, "°C. ", 
-              ifelse(tmel>=55 & tmel<=65, "OK", "No óptimo")))
-  print(paste("Homodímeros máximos:", homod, "pb. ", 
-              ifelse(homod >= 3, "No óptimo", "OK")))
-  print(paste("Horquillas:", 
-              ifelse(hqlla, "Sí, no óptimo", "No")))
+  cat(tipo, "-", primer, "\n")
+  cat("Longitud:", long, "pb. ", 
+              ifelse(long %in% 18:24, "OK", "No óptimo"), "\n")
+  cat("%GC:", gc_percent, "%. ", 
+              ifelse(gc_percent >= 40 & gc_percent<=60, "OK", "No óptimo"), "\n")
+  cat("Tm:", tmel, "°C. ", 
+              ifelse(tmel>=55 & tmel<=65, "OK", "No óptimo"), "\n")
+  cat("Homodímeros máximos:", homod, "pb. ", 
+              ifelse(homod >= 3, "No óptimo", "OK"), "\n")
+  cat("Horquillas:", 
+              ifelse(hqlla, "Sí, no óptimo", "No"), "\n\n")
 }
 
 # Viabilidad de ambos
@@ -194,13 +194,13 @@ eval_pair <- function(fw, rv) {
   dif <- abs(tm(fw) - tm(rv))
   cross <- heterodimero(fw, rv)
   
-  print(paste("Compatibilidad del par:"))
-  print(paste("ΔTm: ", dif, " °C", 
+  cat("Compatibilidad del par:\n")
+  cat("ΔTm: ", dif, " °C", 
               ifelse(dif<=2, "OK (ideal <=2°C",
-                     ifelse(dif<=5, "OK (<=5°C)", "No óptimo"))))
+                     ifelse(dif<=5, "OK (<=5°C)", "No óptimo")), "\n")
   
-  print(paste("Heterodimero: ", cross, "pb. ", 
-              ifelse(cross >= 3, "Es aceptable", "Demasiados heterodímeros, no funcional")))
+  cat("Heterodimero: ", cross, "pb. ", 
+              ifelse(cross >= 3, "Es aceptable", "Demasiados heterodímeros, no funcional"), "\n\n")
   
   return(list(difTm=dif, cross=cross))
 }
@@ -218,18 +218,18 @@ union_sec <- function(fw, rv, sec) {
     fin <- max(uni_rv) + nchar(rc) - 1
     size <- fin - ini + 1
     
-    print("Ambos primers se unen.")
-    print(paste("Forward en:", ini))
-    print(paste("Reverse en:", fin - nchar(rc) + 1))
-    print(paste("Amplicón:", size, "pb"))
+    cat("Ambos primers se unen. \n")
+    cat("Forward en:", ini, "\n")
+    cat("Reverse en:", fin - nchar(rc) + 1, "\n")
+    cat("Amplicón:", size, "pb \n\n")
     
     return(list(ok=TRUE, size=size))
   }
   
-  print("Problemas de unión:")
-  if (!length(uni_fw)) print("Forward no se une.")
-  if (!length(uni_rv)) print("Reverse no se une.")
-  
+  cat("Problemas de unión: \n")
+  if (!length(uni_fw)) cat("Forward no se une.\n")
+  if (!length(uni_rv)) cat("Reverse no se une.\n")
+  cat("\n")
   return(list(ok=FALSE, size=0))
 }
 
@@ -237,27 +237,27 @@ union_sec <- function(fw, rv, sec) {
 evaluar_primers <- function(fw, rv, sec) {
   sec <- normalizar(sec)
   
-  print("Evaluación de primers")
-  print("------------------------------")
-  print(" 1) Individual")
+  cat("Evaluación de primers\n")
+  cat("------------------------------\n")
+  cat("1) Individual\n")
   eval_primer(fw, "Forward")
   eval_primer(rv, "Reverse")
-  print("------------------------------")
-  print(" 2) Compatibilidad de ambos")
+  cat("------------------------------\n")
+  cat("2) Compatibilidad de ambos\n")
   eval_pair(fw, rv)
-  print("------------------------------")
-  print(" 3) Unión a la secuencia")
+  cat("------------------------------\n")
+  cat("3) Unión a la secuencia\n")
   res <- union_sec(fw, rv, sec)
-  print("------------------------------")
-  print(" 4) Resultados")
+  cat("------------------------------\n")
+  cat("4) Resultados\n")
   if (res$ok) {
-    if (res$size %in% 100:500) print("VIABLE")
-    else if (res$size < 100)  print("Amplicón muy pequeño")
-    else                      print("Amplicón muy grande")
+    if (res$size %in% 100:500) cat("VIABLE\n")
+    else if (res$size < 100)  cat("Amplicón muy pequeño\n")
+    else                      cat("Amplicón muy grande\n")
     
-    print(paste("Tamaño:", res$size, "pb"))
+    cat("Tamaño:", res$size, "pb \n")
   } else {
-    print("NO VIABLE")
+    cat("NO VIABLE\n")
   }
   
   return(res)
@@ -292,6 +292,10 @@ calcular_eficiencia <- function(fw, rv){
 calcular_eficiencia (fw = "AATTGATGATGGAATTCCAT",
 rv = "GGTCCGCAGACGGCATGAA")
 
+#############################
+
+
+
 #Simulación PCR 
 pcr <- function(ciclos, eficiencia){
   copias <- numeric(ciclos)
@@ -301,6 +305,9 @@ pcr <- function(ciclos, eficiencia){
   }
   return(copias)
 }
+
+pcr(20, )
+
 
 #Sugerencia de mejores primers
 sug_primer <- function(sec){
