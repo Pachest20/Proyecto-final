@@ -26,26 +26,64 @@ normalizar <- function(sec){
   if (class(sec) == "character") sec <- DNAString(sec)
   return(sec)
 }
-#Se crea función que idnique que hacer dependiendo de los datos que ingrese el usuario#
+#Se crea función que idique que hacer dependiendo de los datos que ingrese el usuario#
 
 ## Análisis de los primers ##
 
 # reverso complementario
 revcomp <- function(x) {
-  reverseComplement(DNAString(x))
+  as.character(reverseComplement(DNAString(x)))
 }
 
-#GC individual#
-gc_dimero <- function(primer){
+# Porcentaje de GC#
+gc_porcent <- function(primer){
   bases <- strsplit(primer, "")[[1]]
-  count <- 0
-  for (i in 1:(length(bases)-1)){
-    if(bases[i]=="G"&& bases[i+1]=="C"){
-      count <- count +1
+  gc <- sum(bases %in% c("G","C"))
+  return(round(100 * gc / length(bases), 1))
+}
+
+# Homodimero #
+homodimero <- function(primer){
+  seq1 <- strsplit(primer, "")[[1]]
+  seq2 <- strsplit(revcomp(primer), "")[[1]]
+  n1 <- length(seq1)
+  n2 <- length(seq2)
+  
+  max_match <- 0
+  
+  for(i in 1:n1){
+    for(j in 1:n2){
+      k <- 0
+      while(i+k <= n1 && j+k <= n2 && seq1[i+k] == seq2[j+k]){
+        k <- k + 1
+      }
+      if(k > max_match) max_match <- k
     }
   }
   
-  return(count)
+  return(max_match)
+}
+
+# Heterodimero #
+heterodimero <- function(fw, rv){
+  seq1 <- strsplit(fw, "")[[1]]
+  seq2 <- strsplit(revcomp(rv), "")[[1]]
+  n1 <- length(seq1)
+  n2 <- length(seq2)
+  
+  max_match <- 0
+  
+  for(i in 1:n1){
+    for(j in 1:n2){
+      k <- 0
+      while(i+k <= n1 && j+k <= n2 && seq1[i+k] == seq2[j+k]){
+        k <- k + 1
+      }
+      if(k > max_match) max_match <- k
+    }
+  }
+  
+  return(max_match)
 }
 
 # Temperatura (Tm)#
@@ -62,8 +100,8 @@ tm <- function(primer) {
 #GC al final del primer#
 gc_final <- function(primer){
   bases <- strsplit(primer, "")[[1]]
-  end <- paste0(bases[(length(bases)-2):(length(bases)-1)],
-                bases[(length(bases)-1):length(bases)])
+  n <- length(bases)
+  end <- paste0(bases[(n-1):n], collapse = "")
   sum(end == "GC")
 }
 
@@ -86,12 +124,17 @@ hopol<- function(primer, k=3){
 horquillas <- function(primer, min_match=4){
   bases <- strsplit(primer, "")[[1]]
   nucl <- length(bases)
-  for (i in 1: (nucl-min_match)) {
-    fragmento <- bases[i:(i+min_match-1)]
+  if (nucl < min_match) return(F)
+  
+  for (i in 1: (nucl-min_match+1)) {
+    fragmento <- paste0(bases[i:(i+min_match-1)], collapse = "")
+    
     frag_rvcm <- as.character(revcomp(fragmento))
-    for (i in 1: (nucl-min_match+1)) {
-      horq <- paste(bases[j:(j+min_match-1)], collapse = "")
-      if(all(horq==frag_rvcm)) return(T)
+    
+    for (j in 1: (nucl-min_match+1)) {
+      horq <- paste0(bases[j:(j+min_match-1)], collapse = "")
+      
+      if(horq==frag_rvcm) return(T)
     }
   }
   return(F)
@@ -111,12 +154,13 @@ dim_prim <- function(seq1, seq2, min_match=4){
   }
   return(F)
 }
- ##Mismo primer##
-mism_prim <- function(primer){
-  dim_prim(primer, primer)
+
+## Mismo primer##
+mism_prim <- function(primer, min_match=4){
+  dim_prim(primer, primer, min_match=4)
 }
 
- ##foward y reverse##
+## foward y reverse##
 cross_dim <- function(fw, rv){
   dim_prim(fw, rv)
 }
@@ -124,7 +168,8 @@ cross_dim <- function(fw, rv){
 #Evaluación del primer# 
 eval_primer <- function(primer, tipo) {
   long <- nchar(primer)
-  gc   <- gc_dimero(primer)
+  gc_percent <- gc_porcent(primer)
+  homod <- homodimero(primer)
   tmel <- tm(primer)
   clamp <- gc_final(primer)
   polim <- hopol(primer)
@@ -132,21 +177,32 @@ eval_primer <- function(primer, tipo) {
   self_prim <- mism_prim(primer)
   
   print(paste(tipo, "-", primer))
-  print(paste("Longitud:", long, "pb. ", ifelse(long %in% 18:24, "OK", "No óptimo")))
-  print(paste("Dímeros GC:", gc, "%. ", ifelse(gc >=40 & gc<=60, "OK", "No óptimo")))
-  print(paste("Tm:", tmel, "°C. ", ifelse(tmel>=55 & tmel<=65, "OK", "No óptimo")))
+  print(paste("Longitud:", long, "pb. ", 
+              ifelse(long %in% 18:24, "OK", "No óptimo")))
+  print(paste("%GC:", gc_percent, "%. ", 
+              ifelse(gc_percent >= 40 & gc_percent<=60, "OK", "No óptimo")))
+  print(paste("Tm:", tmel, "°C. ", 
+              ifelse(tmel>=55 & tmel<=65, "OK", "No óptimo")))
+  print(paste("Homodímeros máximos:", homod, "pb. ", 
+              ifelse(homod >= 3, "No óptimo", "OK")))
+  print(paste("Horquillas:", 
+              ifelse(hqlla, "Sí, no óptimo", "No")))
 }
 
 # Viabilidad de ambos
 eval_pair <- function(fw, rv) {
   dif <- abs(tm(fw) - tm(rv))
-  cross <- cross_dim(fw, rv)
+  cross <- heterodimero(fw, rv)
+  
   print(paste("Compatibilidad del par:"))
-  print(paste("ΔTm: ", dif, " °C", ifelse(dif<=2, "OK (ideal <=2°C",
-                                          ifelse(dif<=5, "OK (<=5°C)", "No óptimo"))))
-  print(paste("Cross dímero >=4pb: ", ifelse(cross, "Sí", "No")))
+  print(paste("ΔTm: ", dif, " °C", 
+              ifelse(dif<=2, "OK (ideal <=2°C",
+                     ifelse(dif<=5, "OK (<=5°C)", "No óptimo"))))
+  
+  print(paste("Heterodimero: ", cross, "pb. ", 
+              ifelse(cross >= 3, "Es aceptable", "Demasiados heterodímeros, no funcional")))
+  
   return(list(difTm=dif, cross=cross))
-        
 }
 
 ## Búsqueda de primers en la secuencia ##
@@ -162,10 +218,10 @@ union_sec <- function(fw, rv, sec) {
     fin <- max(uni_rv) + nchar(rc) - 1
     size <- fin - ini + 1
     
-   print("Ambos primers se unen.")
-   print(paste("Forward en:", ini))
-   print(paste("Reverse en:", fin - nchar(rc) + 1))
-   print(paste("Amplicón:", size, "pb"))
+    print("Ambos primers se unen.")
+    print(paste("Forward en:", ini))
+    print(paste("Reverse en:", fin - nchar(rc) + 1))
+    print(paste("Amplicón:", size, "pb"))
     
     return(list(ok=TRUE, size=size))
   }
@@ -179,20 +235,20 @@ union_sec <- function(fw, rv, sec) {
 
 # VIABILIDAD COMPLETA (RESUMEN)
 evaluar_primers <- function(fw, rv, sec) {
-  sec <- as.character(normalizar(sec))
+  sec <- normalizar(sec)
   
   print("Evaluación de primers")
-  print("--------------------------")
+  print("------------------------------")
   print(" 1) Individual")
   eval_primer(fw, "Forward")
   eval_primer(rv, "Reverse")
-  print("--------------------------")
+  print("------------------------------")
   print(" 2) Compatibilidad de ambos")
   eval_pair(fw, rv)
-  
+  print("------------------------------")
   print(" 3) Unión a la secuencia")
   res <- union_sec(fw, rv, sec)
-  
+  print("------------------------------")
   print(" 4) Resultados")
   if (res$ok) {
     if (res$size %in% 100:500) print("VIABLE")
@@ -207,12 +263,15 @@ evaluar_primers <- function(fw, rv, sec) {
   return(res)
 }
 
-blaOxy <-readDNAStringSet("C:/Users/HP/Documents/Fer/Bioinformática/Proyecto_Final/blaOXY.fna")
+blaOxy <-readDNAStringSet("C:/Users/diego/OneDrive/Documentos/GitHub/Proyecto-final/blaOXY.fna")
 resultado <- evaluar_primers(
   fw = "AATTGATGATGGAATTCCAT",
   rv = "GGTCCGCAGACGGCATGAA",
   sec = blaOxy
 )
+
+
+
 
 #Eficiencia
 calcular_eficiencia <- function(fw, rv){
@@ -251,5 +310,4 @@ sug_primer <- function(sec){
   print("Buscando mejores primers dentro de tu secuencia...")
   print("Esto puede tardar unos segundos...")
   for (len_)
- 
 } 
