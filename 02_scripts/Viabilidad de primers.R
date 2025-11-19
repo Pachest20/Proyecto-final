@@ -250,18 +250,20 @@ evaluar_primers <- function(fw, rv, sec, cycles=30, N0=1) {
   res <- union_sec(fw, rv, sec)
   cat("------------------------------\n")
   
-  cat("4) Viabilidad final y simulación PCR ")
+  cat("4) Viabilidad final y simulación PCR")
   
 #Si los primers no se unen bien#
-  if (!res$ok) {
-    cat("Los primers no funcionan porque no se pudieron alinear bien con la secuencia.\n")
+  if (res$ok) {
+    cat("Los primers no funcionan porque no se pudieron alinear bien con la 
+        secuencia.\n")
     cat("Por esta razón no se hace la simulación PCR.\n")
     return(list(union_sec=res, copias = NULL))
   }
   
 #Si el tamaño del amplicón no es útil#
   if (res$size < 100 || res$size > 2000) {
-    cat("Los primers si se unen, sin embargo el amplicón no queda en un tamaño que sea adecuado.\n")
+    cat("Los primers si se unen, sin embargo el amplicón no queda en un tamaño
+        que sea adecuado.\n")
     cat("Tamaño del amplicón: ", res$size, " pb\n\n")
     cat("No se hace simulación PCR .\n")
     return(list(union_sec = res, copias = NULL))
@@ -292,7 +294,7 @@ cat("Copias después de ", cycles, " ciclos:", format(copias[length(copias)],
                                                      scientific = T), "\n")
 return(list(union_sec = res, eficiencia = efi, copias = copias))
 } 
-blaOxy <-readDNAStringSet("01_raw_data/blaOXY.fna")
+blaOxy <-Biostrings::readDNAStringSet("blaOXY.fna")
 #### No funcionan estos
 resultado <- evaluar_primers(
   fw = "AATTGATGATGGAATTCCAT",
@@ -310,53 +312,88 @@ resultado <- evaluar_primers(
 )
 
 
-### Utiliza el programa ###
+#Si los primer ingresados no funcionan, se sugieren mejores primers#
+sug_primer <- function(sec, fw, rv){
+  #Aquí vamos a revisar si los primers que ingresó lx usuarix si sirven#
+  rev_seq <- reverseComplement(DNAString(sec))
+  pos_fw <- matchPattern(fw, sec)
+  pos_rv <- matchPattern(rv, sec)
+  if (length(pos_fw) > 0 && length(pos_rv) > 0) {
+    #significa que si se pudo alinear no recomendemos nada#
+    return(NULL)
+  }
 
-cat("Bienvenidx a A.M.P.L.I.F.Y. - Simulador PCR in silico\n") 
-# Mensaje inicial #
-nombre <- readline("¿Cuál es tu nombre?")
-saludo <- cat(paste0("Hola, ", nombre, " aquí podrás practicar antes de realizar una PCR. Comencemos:"))
-fw_usuario <- toupper(readline("Ingresa tu primer forward (5' -> 3'): sin comillas")) 
-# primer foward #
-rv_usuario <- toupper(readline("Ingresa tu primer reverse (3' -> 5'): sin comillas")) 
-# primer reverse #
-ciclos_usuario <- as.numeric(readline("¿Cuántos ciclos quieres simular?"))
-# cuantos ciclos necesita el estiduante simular #
-archivo_fna <- readline("Coloca la ruta de tu archivo en formato FNA: sin comillas")
-sec_usuario <- readDNAStringSet(filepath = archivo_fna)
-# secuencia blanco #
 
-#Contalizador para que no sea un cucle eterno #
+# Si llega a esta parte, significa que no sirven sus primers y buscamos nuevos :(#
 
-intentos <- 0
-maximo_intentos <- 2
-# Hay que colocar un bucle principal para la evaluación y la corrección automática #
-repeat {
+  cat("\n --- Buscando primers alternativos (los ingresados por lx alumnx no
+      funcionaron) ---\n")
   
-  cat("\n==============================================\n")
-  cat("Forward:", fw_usuario, "\n")
-  cat("Reverse:", rv_usuario, "\n")
-  cat("==============================================\n")
+  sec_len <- nchar(sec)
+  sec_vec <- as.character(sec)
+  sug_fw <- c()
+  sug_rv <- c()
   
-# Ejecutar la evaluación completa
-  resultado <- evaluar_primers(
-    fw = fw_usuario,
-    rv = rv_usuario,
-    sec = sec_usuario,
-    cycles = ciclos_usuario
-  )
-  
-# Revisar si el par fue viable
-  if (!is.null(resultado$copias)) {
-    cat("\n RESULTADO FINAL: El proceso de simulación ha sido exitoso.\n")
-    break # Para poder salir del bucle si los primers funcionan
-  } else {
-    # Si falló la evaluación, buscar nuevos primers
-    cat("\n CONCLUSIÓN: Los primers iniciales no son viables para la PCR in silico.\n")
-    intentos <- intentos + 1
-    if (intentos >= maximo_intentos) {
-      cat("Se ha alcanzado el límite de intentos. Fin del programa.\n")
-      break
+  #Buscar primer foward:#
+  for (i in 1: (sec_len - 24)) {
+    for (l in 18:24) {
+      subn <- substr(sec_vec, i, i + 1 - 1)
+      gc <- letterFrequency(DNAString(subn), "GC") / nchar(subn)
+      tm_v <- tm(subn)
+      if (tm_v >=55 && tm_v <=65 && gc >=0.40 && gc <=0.60) {
+        sug_fw <- rbind(sug_fw, data.frame(sec = subn, pos = i, tm = tm_v))
+      }
     }
   }
+#Buscar primers reverse:#
+  rev_vec <- as.character(reverseComplement(DNAString(sec)))
+  for (i in 1:(sec_len-24)){
+  for (l in 18:24){
+    subn <- substr (rev_vec, i, i + l - 1)
+    gc <- letterFrequency(DNAString(subn), "GC") / nchar(subn)
+    tm_v <- tm(subn)
+    if (tm_v >=55 && tm_v<=65 && gc >= 0.40 && gc <=0.60){
+      sug_rv <- rbind(sug_rv, data.frame(sec = subn, pos = i, tm=tm_v))
+    }
+  }
+  }
+  
+  if(nrow(sug_fw) == 0 || nrow(sug_rv) == 0){
+    cat("No pude encontrar primers adecuados en la secuencia.\n")
+    return(NULL)
+  }
+  
+  #Probar parejas de primers hasta encontrar una que genere un amplicón válido#
+  for (i in 1:nrow(sug_fw)){
+    for (j in 1:nrow(sug_rv)) {
+      inicio <- sug_fw$pos[i]
+      fin <-seq_len - sug_rv$pos[j]
+      tamaño <- fin - inicio + 1
+      if (tamaño >=100 && tamaño <= 2000){
+        cat("Se encontró un par recomendable:\n")
+        cat("Primer foward: ", sug_fw$sec[i], "\n")
+        cat("Primer reverse: ", sug_rv$sec[j], "\n")
+        cat("Tamaño del amplicón: ", tamaño, " pb\n")
+        return(list(
+          foward = sug_fw[i,],
+          reverse = sug_rv[j,],
+          amplicon = tamaño
+        ))
+      }
+    }
+  }
+  cat ("Se encontraron primers, pero ninguno forma un amplicón que cumpla con 
+       el rango establecido.\n")
+  return(NULL)
+
 }
+cat("Bienvenidx a A.M.P.L.I.F.Y. - Simulador PCR in silico\n") 
+#Mensaje inicial#
+fw <- toupper(readline("Ingresa tu primer forward (5' -> 3'):")) 
+#primer foward#
+rv <- toupper(readline("Ingresa tu primer reverse (3' -> 5'):")) 
+#primer reverse#
+ciclos <- as.numeric(readline("¿Cuántos ciclos quieres simular?"))
+#cuantos ciclos necesita el estiduante simular#
+sec <- readDNAStringSet(readline("Coloca tu archivo en formato FNA:"))
+#secuencia blanco#
