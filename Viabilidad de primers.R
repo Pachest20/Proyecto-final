@@ -293,6 +293,7 @@ cat("Copias después de ", cycles, " ciclos:", format(copias[length(copias)],
 return(list(union_sec = res, eficiencia = efi, copias = copias))
 } 
 blaOxy <-readDNAStringSet("01_raw_data/blaOXY.fna")
+
 #### No funcionan estos
 resultado <- evaluar_primers(
   fw = "AATTGATGATGGAATTCCAT",
