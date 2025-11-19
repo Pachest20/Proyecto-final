@@ -20,6 +20,8 @@ sec <- readDNAStringSet(readline("Coloca tu archivo en formato FNA:"))
 #secuencia blanco#
 
 
+######## VIABILIDAD DE PCR ###################
+
 # función que normaliza la secuencia (porque a veces es DNAStringSet)
 normalizar <- function(sec){
   if (class(sec) == "DNAStringSet") sec <- sec [[1]]
@@ -155,10 +157,6 @@ dim_prim <- function(seq1, seq2, min_match=4){
   return(F)
 }
 
-## Mismo primer##
-mism_prim <- function(primer, min_match=4){
-  dim_prim(primer, primer, min_match=4)
-}
 
 ## foward y reverse##
 cross_dim <- function(fw, rv){
@@ -174,7 +172,6 @@ eval_primer <- function(primer, tipo) {
   clamp <- gc_final(primer)
   polim <- hopol(primer)
   hqlla<- horquillas(primer)
-  self_prim <- mism_prim(primer)
   
   cat(tipo, "-", primer, "\n")
   cat("Longitud:", long, "pb. ", 
@@ -200,7 +197,7 @@ eval_pair <- function(fw, rv) {
                      ifelse(dif<=5, "OK (<=5°C)", "No óptimo")), "\n")
   
   cat("Heterodimero: ", cross, "pb. ", 
-              ifelse(cross >= 3, "Es aceptable", "Demasiados heterodímeros, no funcional"), "\n\n")
+              ifelse(cross >= 3, "Demasiados heterodímeros, no funcional", "Es aceptable"), "\n\n")
   
   return(list(difTm=dif, cross=cross))
 }
@@ -233,22 +230,39 @@ union_sec <- function(fw, rv, sec) {
   return(list(ok=FALSE, size=0))
 }
 
+
+########### PCR
+sim_pcr <- function(E, cycles = cycles, N0 = 1) {
+  copias <- numeric(cycles + 1)
+  copias[1] <- N0
+  
+  for (i in 2:(cycles + 1)) {
+    copias[i] <- copias[i - 1] * (1 + E)
+  }
+  
+  return(copias)
+}
+
 # VIABILIDAD COMPLETA (RESUMEN)
-evaluar_primers <- function(fw, rv, sec) {
+evaluar_primers <- function(fw, rv, sec, cycles=30, N0=1) {
+  
   sec <- normalizar(sec)
   
-  cat("Evaluación de primers\n")
+  cat("[Evaluación de primers]\n")
   cat("------------------------------\n")
   cat("1) Individual\n")
   eval_primer(fw, "Forward")
   eval_primer(rv, "Reverse")
   cat("------------------------------\n")
+  
   cat("2) Compatibilidad de ambos\n")
   eval_pair(fw, rv)
   cat("------------------------------\n")
+  
   cat("3) Unión a la secuencia\n")
   res <- union_sec(fw, rv, sec)
   cat("------------------------------\n")
+  
   cat("4) Resultados\n")
   if (res$ok) {
     if (res$size %in% 100:500) cat("VIABLE\n")
@@ -259,17 +273,50 @@ evaluar_primers <- function(fw, rv, sec) {
   } else {
     cat("NO VIABLE\n")
   }
+  cat("------------------------------\n")
+  
+  cat("5) Simulación PCR\n")
+  eficiencia <- function(fw, rv){
+  dT <- abs(tm(fw) - tm(rv)) 
+  if (dT <= 2) return(0.95) 
+  if (dT <= 5) return(0.85) 
+  return(0.60) }
+  
+  E <- eficiencia(fw, rv)
+  copias <- sim_pcr(E, cycles=cycles, N0=N0)
+  cat("Eficiencia estimada:", round(E, 3), "\n")
+  cat("Copias tras", cycles, "ciclos:", format(copias[length(copias)], scientific=TRUE), "\n")
+  
+  if (res$ok) {
+    cat("Amplicón total:", res$size, "bp\n")
+  } else {
+    cat("No hay amplicón, PCR no viable.\n")
+  }
+  
+  return(list(
+    union_sec = res,
+    copias = copias
+  ))
   
   return(res)
 }
 
 blaOxy <-readDNAStringSet("C:/Users/diego/OneDrive/Documentos/GitHub/Proyecto-final/blaOXY.fna")
+#### No funcionan estos
 resultado <- evaluar_primers(
   fw = "AATTGATGATGGAATTCCAT",
   rv = "GGTCCGCAGACGGCATGAA",
-  sec = blaOxy
+  sec = blaOxy,
+  cycles = 45
 )
 
+#### Estos primers sí funcionan
+resultado <- evaluar_primers(
+  fw = "AGAGCGGAATGACGCTGGCT",
+  rv = "CGATCGAGACGAAAGGTGGC",
+  sec = blaOxy,
+  cycles = 45
+)
 
 
 
@@ -295,18 +342,6 @@ rv = "GGTCCGCAGACGGCATGAA")
 #############################
 
 
-
-#Simulación PCR 
-pcr <- function(ciclos, eficiencia){
-  copias <- numeric(ciclos)
-  copias [1] <- 1
-  for(i in 2:ciclos){
-    copias [i] <- copias[i-1] * (1 + eficiencia)
-  }
-  return(copias)
-}
-
-pcr(20, )
 
 
 #Sugerencia de mejores primers
