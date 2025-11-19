@@ -129,21 +129,6 @@ horquillas <- function(primer, min_match=4){
   return(F)
 }
 
-# Evitar que el primer se una consigo mismo o con otro #
-
-dim_prim <- function(seq1, seq2, min_match=4){
-  bases1 <- strsplit(seq1, "")[[1]]
-  bases2 <- strsplit(revcomp(seq2), "")[[1]]
-  n1 <- length(bases1)
-  n2 <- length(bases2)
-  for (i in 1: (n1-min_match+1)) {
-    for (j in 1: (n2-min_match+1)) {
-      if (all(bases1[i:(i+min_match-1)] == bases2[j:(j+min_match-1)])) return(T)
-    }
-  }
-  return(F)
-}
-
 
 ## foward y reverse##
 cross_dim <- function(fw, rv){
@@ -294,7 +279,7 @@ cat("Copias después de ", cycles, " ciclos:", format(copias[length(copias)],
                                                      scientific = T), "\n")
 return(list(union_sec = res, eficiencia = efi, copias = copias))
 } 
-blaOxy <-Biostrings::readDNAStringSet("blaOXY.fna")
+blaOxy <-Biostrings::readDNAStringSet("01_raw_data/blaOXY.fna")
 #### No funcionan estos
 resultado <- evaluar_primers(
   fw = "AATTGATGATGGAATTCCAT",
@@ -312,81 +297,7 @@ resultado <- evaluar_primers(
 )
 
 
-#Si los primer ingresados no funcionan, se sugieren mejores primers#
-sug_primer <- function(sec, fw, rv){
-  #Aquí vamos a revisar si los primers que ingresó lx usuarix si sirven#
-  rev_seq <- reverseComplement(DNAString(sec))
-  pos_fw <- matchPattern(fw, sec)
-  pos_rv <- matchPattern(rv, sec)
-  if (length(pos_fw) > 0 && length(pos_rv) > 0) {
-    #significa que si se pudo alinear no recomendemos nada#
-    return(NULL)
-  }
 
-
-# Si llega a esta parte, significa que no sirven sus primers y buscamos nuevos :(#
-
-  cat("\n --- Buscando primers alternativos (los ingresados por lx alumnx no
-      funcionaron) ---\n")
-  
-  sec_len <- nchar(sec)
-  sec_vec <- as.character(sec)
-  sug_fw <- c()
-  sug_rv <- c()
-  
-  #Buscar primer foward:#
-  for (i in 1: (sec_len - 24)) {
-    for (l in 18:24) {
-      subn <- substr(sec_vec, i, i + 1 - 1)
-      gc <- letterFrequency(DNAString(subn), "GC") / nchar(subn)
-      tm_v <- tm(subn)
-      if (tm_v >=55 && tm_v <=65 && gc >=0.40 && gc <=0.60) {
-        sug_fw <- rbind(sug_fw, data.frame(sec = subn, pos = i, tm = tm_v))
-      }
-    }
-  }
-#Buscar primers reverse:#
-  rev_vec <- as.character(reverseComplement(DNAString(sec)))
-  for (i in 1:(sec_len-24)){
-  for (l in 18:24){
-    subn <- substr (rev_vec, i, i + l - 1)
-    gc <- letterFrequency(DNAString(subn), "GC") / nchar(subn)
-    tm_v <- tm(subn)
-    if (tm_v >=55 && tm_v<=65 && gc >= 0.40 && gc <=0.60){
-      sug_rv <- rbind(sug_rv, data.frame(sec = subn, pos = i, tm=tm_v))
-    }
-  }
-  }
-  
-  if(nrow(sug_fw) == 0 || nrow(sug_rv) == 0){
-    cat("No pude encontrar primers adecuados en la secuencia.\n")
-    return(NULL)
-  }
-  
-  #Probar parejas de primers hasta encontrar una que genere un amplicón válido#
-  for (i in 1:nrow(sug_fw)){
-    for (j in 1:nrow(sug_rv)) {
-      inicio <- sug_fw$pos[i]
-      fin <-seq_len - sug_rv$pos[j]
-      tamaño <- fin - inicio + 1
-      if (tamaño >=100 && tamaño <= 2000){
-        cat("Se encontró un par recomendable:\n")
-        cat("Primer foward: ", sug_fw$sec[i], "\n")
-        cat("Primer reverse: ", sug_rv$sec[j], "\n")
-        cat("Tamaño del amplicón: ", tamaño, " pb\n")
-        return(list(
-          foward = sug_fw[i,],
-          reverse = sug_rv[j,],
-          amplicon = tamaño
-        ))
-      }
-    }
-  }
-  cat ("Se encontraron primers, pero ninguno forma un amplicón que cumpla con 
-       el rango establecido.\n")
-  return(NULL)
-
-}
 cat("Bienvenidx a A.M.P.L.I.F.Y. - Simulador PCR in silico\n") 
 #Mensaje inicial#
 fw <- toupper(readline("Ingresa tu primer forward (5' -> 3'):")) 

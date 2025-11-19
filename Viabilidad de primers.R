@@ -129,21 +129,6 @@ horquillas <- function(primer, min_match=4){
   return(F)
 }
 
-# Evitar que el primer se una consigo mismo o con otro #
-
-dim_prim <- function(seq1, seq2, min_match=4){
-  bases1 <- strsplit(seq1, "")[[1]]
-  bases2 <- strsplit(revcomp(seq2), "")[[1]]
-  n1 <- length(bases1)
-  n2 <- length(bases2)
-  for (i in 1: (n1-min_match+1)) {
-    for (j in 1: (n2-min_match+1)) {
-      if (all(bases1[i:(i+min_match-1)] == bases2[j:(j+min_match-1)])) return(T)
-    }
-  }
-  return(F)
-}
-
 
 ## foward y reverse##
 cross_dim <- function(fw, rv){
