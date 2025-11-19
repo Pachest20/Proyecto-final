@@ -7,19 +7,6 @@
 #Cargar paqueterías necesarias#
 library(Biostrings)
 
-
-cat("Bienvenidx a A.M.P.L.I.F.Y. - Simulador PCR in silico\n") 
-#Mensaje inicial#
-fw <- toupper(readline("Ingresa tu primer forward (5' -> 3'):")) 
-#primer foward#
-rv <- toupper(readline("Ingresa tu primer reverse (3' -> 5'):")) 
-#primer reverse#
-ciclos <- as.numeric(readline("¿Cuántos ciclos quieres simular?"))
-#cuantos ciclos necesita el estiduante simular#
-sec <- readDNAStringSet(readline("Coloca tu archivo en formato FNA:"))
-#secuencia blanco#
-
-
 ######## VIABILIDAD DE PCR ###################
 
 # función que normaliza la secuencia (porque a veces es DNAStringSet)
@@ -263,43 +250,48 @@ evaluar_primers <- function(fw, rv, sec, cycles=30, N0=1) {
   res <- union_sec(fw, rv, sec)
   cat("------------------------------\n")
   
-  cat("4) Resultados\n")
-  if (res$ok) {
-    if (res$size %in% 100:500) cat("VIABLE\n")
-    else if (res$size < 100)  cat("Amplicón muy pequeño\n")
-    else                      cat("Amplicón muy grande\n")
-    
-    cat("Tamaño:", res$size, "pb \n")
-  } else {
-    cat("NO VIABLE\n")
-  }
-  cat("------------------------------\n")
+  cat("4) Viabilidad final y simulación PCR")
   
-  cat("5) Simulación PCR\n")
+#Si los primers no se unen bien#
+  if (res$ok) {
+    cat("Los primers no funcionan porque no se pudieron alinear bien con la 
+        secuencia.\n")
+    cat("Por esta razón no se hace la simulación PCR.\n")
+    return(list(union_sec=res, copias = NULL))
+  }
+  
+#Si el tamaño del amplicón no es útil#
+  if (res$size < 100 || res$size > 2000) {
+    cat("Los primers si se unen, sin embargo el amplicón no queda en un tamaño
+        que sea adecuado.\n")
+    cat("Tamaño del amplicón: ", res$size, " pb\n\n")
+    cat("No se hace simulación PCR .\n")
+    return(list(union_sec = res, copias = NULL))
+  }
+  
+#Si llegó hasta acá, todo esta bien#
+  cat("Los primers son viables .\n")
+  cat("Tamaño del amplicón: ", res$size, " pb\n\n")
+  
+#Función para estimar eficiencia segpun la diferencia de la Tm#
   eficiencia <- function(fw, rv){
-  dT <- abs(tm(fw) - tm(rv)) 
-  if (dT <= 2) return(0.95) 
-  if (dT <= 5) return(0.85) 
-  return(0.60) }
-  
-  E <- eficiencia(fw, rv)
-  copias <- sim_pcr(E, cycles=cycles, N0=N0)
-  cat("Eficiencia estimada:", round(E, 3), "\n")
-  cat("Copias tras", cycles, "ciclos:", format(copias[length(copias)], scientific=TRUE), "\n")
-  
-  if (res$ok) {
-    cat("Amplicón total:", res$size, "bp\n")
-  } else {
-    cat("No hay amplicón, PCR no viable.\n")
+    dif_tm <- abs(tm(fw) - tm(rv))
+    if (dif_tm <=2) {
+      return(0.95)
+    } else if (dif_tm <=5) {
+      return(0.85)
+    } else {
+      return(0.60)
+    }
   }
   
-  return(list(
-    union_sec = res,
-    copias = copias
-  ))
-  
-  return(res)
-}
+#Calcular eficiencia y simular PCR#
+efi <- eficiencia(fw, rv)
+copias <- sim_pcr(efi, cycles = cycles, N0 = N0)
+cat("Eficiencia astimada: ", round(efi, 3), "\n")
+cat("Copias después de ", cycles, " ciclos:", format(copias[length(copias)], 
+                                                     scientific = T), "\n")
+return(list(union_sec = res, eficiencia = efi, copias = copias))
 
 blaOxy <-readDNAStringSet("C:/Users/diego/OneDrive/Documentos/GitHub/Proyecto-final/blaOXY.fna")
 #### No funcionan estos
@@ -318,38 +310,87 @@ resultado <- evaluar_primers(
   cycles = 45
 )
 
+#Si los primer ingresados no funcionan, se sugieren mejores primers#
+sug_primer <- function(sec, fw, rv){
+  #Aquí vamos a revisar si los primers que ingresó lx usuarix si sirven#
+  rev_seq <- reverseComplement(DNAString(sec))
+  pos_fw <- matchPattern(fw, sec)
+  pos_rv <- matchPattern(rv, sec)
+  if (length(pos_fw) > 0 && length(pos_rv) > 0) {
+    #significa que si se pudo alinear no recomendemos nada#
+    return(NULL)
+  }
 
+# Si llega a esta parte, significa que no sirven sus primers y buscamos nuevos :(#
 
-#Eficiencia
-calcular_eficiencia <- function(fw, rv){
-  bases_fw <- strsplit(fw, "")[[1]]
-  gc_fw <- gc_dimero(fw)
-  bases_rv <- strsplit(rv, "")[[1]]
-  gc_rv <- gc_dimero(rv)
-  tm_fw <- tm(fw)
-  tm_rv <- tm(rv)
-  dif_tm <- abs(tm_fw - tm_rv)
-  pen_gc <- ifelse(gc_fw <0.40 | gc_fw > 0.60, 0.85, 1)
-  pen_gc <- ifelse(gc_rv <0.40 | gc_rv > 0.60, 0.85, 1)
-  pen_tm <- ifelse(dif_tm > 2, 0.80, 1)
-  eficiencia <- 1 * pen_gc * pen_tm
-  return(eficiencia)
-}
-
-calcular_eficiencia (fw = "AATTGATGATGGAATTCCAT",
-rv = "GGTCCGCAGACGGCATGAA")
-
-#############################
-
-
-
-
-#Sugerencia de mejores primers
-sug_primer <- function(sec){
-  sec <- as.character(sec)
-  largo <- nchar(sec)
-  tamaño <- 18:24
-  print("Buscando mejores primers dentro de tu secuencia...")
-  print("Esto puede tardar unos segundos...")
-  for (len_)
+  cat("\n --- Buscando primers alternativos (los ingresados por lx alumnx no
+      funcionaro) ---\n")
+  
+  sec_len <- nchar(sec)
+  sec_vec <- as.character(sec)
+  sug_fw <- c()
+  sug_rv <- c()
+  
+  #Buscar primer foward:#
+  for (i in 1: (sec_len - 24)) {
+    for (l in 18:24) {
+      subn <- substr(sec_vec, i, i + 1 - 1)
+      gc <- letterFrequency(DNAString(subn), "GC") / nchar(subn)
+      tm_v <- tm(DNAString(subn))
+      if (tm_v >=55 && tm_v <=65 && gc >=0.40 && gc <=0.60) {
+        sug_fw <- rbind(sug_fw, data.frame(sec = subn, pos = i, tm = tm_v))
+      }
+    }
+  }
+#Buscar primers reverse:#
+  rev_vec <- as.character(reverseComplement(DNAString(sec)))
+  for (i in 1:(seq_len-24)){
+  for (l in 18:24){
+    subn <- substr (rev_vec, i, i + l - 1)
+    gc <- letterFrequency(DNAString(subn), "GC") / nchar(subn)
+    tm_v <- tm(DNAString(subn))
+    if (tm_v >=55 && tm_v<=65 && gc >= 0.40 && gc <=0.60){
+      sug_rv <- rbind(sug_rv, data.frame(sec = subn, pos = i, tm=tm_v))
+    }
+  }
+  }
+  
+  if(nrow(sug_fw) == 0 || nrow(sug_rv) == 0){
+    cat("No pude encontrar primers adecuados en la secuencia.\n")
+    return(NULL)
+  }
+  
+  #Probar parejas de primers hasta encontrar una que genere un amplicón válido#
+  for (i in 1:nrow(sug_fw)){
+    for (j in 1:nrow(sug_rv)) {
+      inicio <- sug_fw$pos[i]
+      fin <-seq_len - sug_rv$pos[j]
+      tamaño <- fin - inicio + 1
+      if (tamaño >=100 && tamaño <= 2000){
+        cat("Se encontró un par recomendable:\n")
+        cat("Primer foward: ", sug_fw$sec[i], "\n")
+        cat("Primer reverse: ", sug_rv$sec[j], "\n")
+        cat("Tamaño del amplicón: ", tamaño, " pb\n")
+        return(list(
+          foward = sug_fw[i,],
+          reverse = sug_rv[j,],
+          amplicon = tamaño
+        ))
+      }
+    }
+  }
+  cat ("Se encontraron primers, pero ninguno forma un amplicón que cumpla con 
+       el rango establecido.\n")
+  return(NULL)
 } 
+
+cat("Bienvenidx a A.M.P.L.I.F.Y. - Simulador PCR in silico\n") 
+#Mensaje inicial#
+fw <- toupper(readline("Ingresa tu primer forward (5' -> 3'):")) 
+#primer foward#
+rv <- toupper(readline("Ingresa tu primer reverse (3' -> 5'):")) 
+#primer reverse#
+ciclos <- as.numeric(readline("¿Cuántos ciclos quieres simular?"))
+#cuantos ciclos necesita el estiduante simular#
+sec <- readDNAStringSet(readline("Coloca tu archivo en formato FNA:"))
+#secuencia blanco#
